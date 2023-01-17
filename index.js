@@ -6,6 +6,12 @@ var htmlToText = require('html-to-text');
 var path = require('path');
 var htmlParser = require('node-html-parser');
 
+const promisifiedForEach = async (arr, callback) => {
+  for (let i = 0; i < arr.length; i++) {
+    await callback(arr[i], i, arr);
+  }
+};
+
 class EPUBToText {
   /**
    * EpubToText#extract()
@@ -23,30 +29,53 @@ class EPUBToText {
     var klass = this;
 
     // callback fired for each chapter (or they are written to disk)
-    epub.on('end', function() {
-      epub.flow.forEach(function(chapter, sequence) {
-        epub.getChapter(chapter.id, function(err, html) {
-          var txt = '';
-          if (html) {
-            txt = htmlToText.fromString(html.toString(), {ignoreHref: true});
-          };
-          var meta = {};
-          meta.id = chapter.id;
-          meta.excerpt = txt.trim().slice(0, 250);
-          meta.size = txt.length
-          meta.sequence_number = sequence
-          if (chapter.title) {
-            meta.title = chapter.title
-          } else {
-            meta.title = klass.getTitleFromHtml(html);
-          }
-          callback(err, txt, sequence, meta);
+    epub.on('end', async function () {
+      const sequences = [];
+
+      const epubFlow = async function (chapter, sequence) {
+
+        await new Promise((resolve) => {
+          epub.getChapter(chapter.id, function (err, html) {
+            var txt = '';
+            if (html) {
+              txt = htmlToText.fromString(html.toString(), { ignoreHref: true });
+            };
+            var meta = {};
+            meta.id = chapter.id;
+            meta.excerpt = txt.trim().slice(0, 250);
+            meta.size = txt.length
+            meta.sequence_number = sequence
+            if (chapter.title) {
+              meta.title = chapter.title
+            } else {
+              meta.title = klass.getTitleFromHtml(html);
+            }
+
+            if (callback) {
+              callback(err, txt, sequence, meta);
+            }
+
+            sequences.push({
+              ...meta,
+              sequence,
+              text: txt.replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/[\u2013\u2014]/g, '-').replace(/[\u2026]/g, '...')
+            });
+
+            resolve();
+          });
         });
-      });
+      }
+
+      // epub.flow.forEach();
+      await promisifiedForEach(epub.flow, epubFlow);
+
+      // console.log(sequences);
+      fs.writeFileSync(`./parsed/${sourceFile.match(/\w+(?=\.)/)[0]}.json`, JSON.stringify(sequences));
+
     });
 
     // callback as soon as file is ready to give info on how many chapters will be processed
-    epub.on('end', function() {
+    epub.on('end', function () {
       if (initialCallback) {
         initialCallback(null, epub.flow.length);
       };

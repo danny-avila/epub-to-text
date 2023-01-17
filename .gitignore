@@ -7,4 +7,5 @@ test.csv
 out/*
 tests/famille*
 node_modules
+parsed/
 *~
