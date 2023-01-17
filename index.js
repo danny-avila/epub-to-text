@@ -24,7 +24,7 @@ class EPUBToText {
    * at the beginning of the extraction.
    * Callback parameters are (err, numberOfChapters)
    **/
-  extract(sourceFile, callback, initialCallback) {
+  extract(sourceFile, endCallback, chapterCallback, initialCallback) {
     var epub = new EPub(sourceFile);
     var klass = this;
 
@@ -51,8 +51,8 @@ class EPUBToText {
               meta.title = klass.getTitleFromHtml(html);
             }
 
-            if (callback) {
-              callback(err, txt, sequence, meta);
+            if (chapterCallback) {
+              chapterCallback(err, txt, sequence, meta);
             }
 
             sequences.push({
@@ -69,8 +69,7 @@ class EPUBToText {
       // epub.flow.forEach();
       await promisifiedForEach(epub.flow, epubFlow);
 
-      // console.log(sequences);
-      fs.writeFileSync(`./parsed/${sourceFile.match(/\w+(?=\.)/)[0]}.json`, JSON.stringify(sequences));
+      endCallback(sequences);
 
     });
 
